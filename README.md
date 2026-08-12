@@ -16,18 +16,18 @@ not been approved to ship in Chrome.
 ## Introduction
 
 The **Vector Store API** is a proposed Web Platform API that provides an
-end-to-end semantic retrieval system entirely on the user's device. Instead of
-requiring developers to manually manage vectors, the API automatically handles
-data ingestion, text chunking, embedding generation, indexing, and semantic
-similarity search. By leveraging an on-device embedding model implicitly, this
-API enables powerful semantic understanding features by providing a high-level
-abstraction that handles low-level data orchestration and vector mechanics
-natively.
+end-to-end semantic retrieval system entirely on the user's device. By executing
+strictly on-device, it delivers significant end-user benefits: it protects user
+privacy by keeping sensitive data local, ensures offline availability, and offers
+near-instant performance by eliminating network round-trips.
 
-This approach significantly lowers the barrier to entry for generalist web
-developers, providing a "managed" semantic search experience directly in the
-browser, similar to high-level industry APIs (e.g., OpenAI Vector Store API,
-Weaviate, BigQuery Vector Database, etc).
+Beyond these end-user benefits, the API significantly lowers the barrier to entry
+for web developers. Instead of requiring developers to manually manage vectors,
+the API automatically handles data ingestion, text chunking, embedding generation,
+indexing, and semantic similarity search. By providing a "managed" semantic search
+experience directly in the browser—similar to high-level industry APIs (e.g.,
+OpenAI Vector Store API)—this high-level abstraction handles low-level data
+orchestration and vector mechanics natively.
 
 ## Goals
 
@@ -111,7 +111,7 @@ if (!VectorStore || (await VectorStore.availability()) === "unavailable") {
 }
 
 // 2. Create a vector store with configuration.
-// Note: Developers can query \`await VectorStore.params()\` to discover
+// Note: Developers can query `await VectorStore.params()` to discover
 // the model's maximum supported chunk size and overlap.
 const vectorStore = await VectorStore.create({
   id: "my-app-notes",
@@ -120,7 +120,7 @@ const vectorStore = await VectorStore.create({
     maxChunkSizeTokens: 400, // The maximum number of tokens in each chunk
     chunkOverlapTokens: 50 // The number of tokens that overlap between chunks
   },
-  distance_type: 'Cosine'
+  distanceType: 'Cosine'
 });
 
 // 3. Insert raw text strings.
@@ -152,8 +152,8 @@ console.log(insertResult);
 
 // 4. Perform a semantic search using text.
 const searchResults = await vectorStore.findNearest("fox, the animal", {
-  max_num_results: 1,
-  score_threshold: 0.5
+  maxNumResults: 1,
+  scoreThreshold: 0.5
 });
 
 // 5. Review results.
@@ -208,7 +208,7 @@ console.log(availableStores);
 */
 
 // 2. Retrieve the vector store by id.
-// Notice that we do not pass the \`chunkingStrategy\` here, as those
+// Notice that we do not pass the `chunkingStrategy` here, as those
 // structural settings are inherited from when the store was created.
 const vectorStore = await VectorStore.retrieve("my-app-notes");
 console.log(vectorStore.metadata);
@@ -245,13 +245,13 @@ console.log(contents);
 [
   {
     id: "note_123",
-    vector_store_id: "my-app-notes",
+    vectorStoreId: "my-app-notes",
     createdAt: 1718293849392,
     lastModified: 1718293999123,
   },
   {
     id: "note_456",
-    vector_store_id: "my-app-notes",
+    vectorStoreId: "my-app-notes",
     createdAt: 1718293849392,
     lastModified: 1718293999123,
   },
@@ -283,7 +283,7 @@ const vectorStore = await VectorStore.retrieve("offline-docs-db");
 const userQuestion = "How do I configure the main router?";
 // 3. Query the Vector Store to find the most relevant passages.
 const searchResults = await vectorStore.findNearest(userQuestion, {
-  max_num_results: 3 });
+  maxNumResults: 3 });
 // 4. Extract the text content from the search results to build the context.
 const context = searchResults.map(result =\> result.content).join("\\n\\n");
 // 5. Use the Prompt API (another Built-in AI API) to synthesize an answer.
@@ -291,8 +291,7 @@ const session = await LanguageModel.create({
   initialPrompts: [
     {
       role: "system",
-      content: "You are a helpful assistant. Answer the user's question using ONLY the
-      provided context. Context:\\n" + context
+      content: "You are a helpful assistant. Answer the user's question using ONLY the provided context. Context:\n" + context
     }
   ]
 });
@@ -320,26 +319,34 @@ before it is ever submitted to the server.
 
 ## Detailed Design Discussion
 
+### Chunking Strategy
+
+To efficiently index long documents, the API automatically breaks the text into smaller segments called "chunks." This process is governed by the `chunkingStrategy`:
+- `maxChunkSizeTokens`: Defines the upper limit for the size of each chunk.
+- `chunkOverlapTokens`: Specifies the number of tokens that overlap between adjacent chunks. Overlap helps preserve context that might otherwise be lost if a concept is split precisely at a chunk boundary.
+
+Developers can query `await VectorStore.params()` to discover the maximum supported chunk size and overlap limits for the underlying model.
+
 ### Privacy and Retention for Raw Text
 
 A major consideration for the Vector Store API is the privacy and security
 implication of persisting raw text. We propose two primary mechanisms to give
 developers control over data retention and privacy:
 
-#### The \`storeContent\` Configuration
+#### The `storeContent` Configuration
 
 Developers can explicitly opt out of storing raw text by setting a storeContent:
 false configuration during vector store creation. In this mode, the browser
 generates the embedding and immediately discards the raw text, persisting only
-the embeddings and the developer-provided identifier (\`id\`).
+the embeddings and the developer-provided identifier (`id`).
 
 **Caveat regarding Chunking and Identifiers**
 
 When developers choose to discard the raw text, they rely entirely on the
-returned \`id\` to map the search result back to their raw text. If the
-developer inputs a massive document under a single \`id\`, the browser's
+returned `id` to map the search result back to their raw text. If the
+developer inputs a massive document under a single `id`, the browser's
 automatic chunking will split it into multiple embeddings that all map back to
-that same \`id\`. During a search, the developer will know which document
+that same `id`. During a search, the developer will know which document
 matched, but they will not know which specific chunk or paragraph within the
 document matched. To mitigate this 'lost context' problem, the search API can
 return the chunk's original substring range (e.g., character start and end
@@ -372,15 +379,15 @@ When a browser updates its embedding model, it can manage the migration of the
 user's local Vector Store using the following mechanisms, depending on the
 developer's configuration:
 
-**Automatic Re-generation (\`storeContent: true\`)**
+**Automatic Re-generation (`storeContent: true`)**
 
 If the developer opted to store the raw text alongside the vectors (i.e.,
-\`storeContent: true\`), the browser could re-generate embeddings with the new
+`storeContent: true`), the browser could re-generate embeddings with the new
 embedding model.
 
-**Handling Discarded Text (\`storeContent: false\`)**
+**Handling Discarded Text (`storeContent: false`)**
 
-If a developer used \`storeContent: false\`, the raw text is no longer available
+If a developer used `storeContent: false`, the raw text is no longer available
 to be re-embedded. To handle this scenario, there are two potential paths:
 
 1.  **Forward Emulation Models:** To mitigate this without forcing a complete
@@ -533,7 +540,7 @@ manage model versioning complexities.
     developers to explicitly handle model versioning and cross-browser
     fragmentation. Because browsers may use different models, the API must
     expose a model or embedding space identifier (e.g.,
-    \`embedding-gemma-300m\`). Developers building server-side syncs must manage
+    `embedding-gemma-300m`). Developers building server-side syncs must manage
     this configuration overhead, which introduces complexity compared to the
     fully encapsulated built-in Vector Store approach.
       - **Mitigation via Web-Native Content Negotiation:** To manage this
@@ -657,11 +664,12 @@ migration.
       - **Chunking and Token Limits:** Some embedding models have different
         maximum input token limits (e.g., 512 vs. 2048 tokens). To maintain
         cross-browser compatibility, developers would either have to rely
-        entirely on a browser-determined \`auto\` chunking strategy, or the API
-        would need to expose expose capability ranges (e.g., maximum supported
-        chunk size bounds), so developers can dynamically configure their
-        chunking logic per browser. Some developers also prefer custom,
-        context-aware chunking algorithms for their specific use cases.
+        entirely on a browser-determined `auto` chunking strategy, or the API
+        would need to expose capability ranges (e.g., maximum supported chunk
+        size bounds, which will likely be exposed via `VectorStore.params()`),
+        so developers can dynamically configure their chunking logic per
+        browser. Some developers also prefer custom, context-aware chunking
+        algorithms for their specific use cases.
 
 #### Option 4: Two-Tier APIs (Vector Store + Embedding API)
 
@@ -741,6 +749,10 @@ By discussing and co-designing a high-level API with the community now, we are
 not prematurely fixing the web into today's fragmented AI model landscape;
 rather, we are building the structural plumbing required for that inevitable,
 commoditized future, and all the upsides and ergonomics it entails.
+
+## Internationalization Considerations
+
+Because different embedding models have different levels of language support, the API needs to account for content in various languages. To address this, we are considering exposing supported languages via `VectorStore.params()` (similar to other built-in AI APIs like the Prompt API) and requiring developers to provide a `language` parameter within the `create()` options. This design allows the API to fail early with an error if the user's device lacks a suitable embedding model for the requested language, ensuring developers can gracefully fall back to alternative architectures.
 
 ## Security Considerations
 
