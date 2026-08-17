@@ -115,6 +115,7 @@ if (!VectorStore || (await VectorStore.availability()) === "unavailable") {
 // the model's maximum supported chunk size and overlap.
 const vectorStore = await VectorStore.create({
   id: "my-app-notes",
+  taskType: "retrieval", // Automatically applies task-specific embeddings
   chunkingStrategy: {
     // Browsers select safe 'middle-of-the-road' default values.
     maxChunkSizeTokens: 400, // The maximum number of tokens in each chunk
@@ -125,7 +126,8 @@ const vectorStore = await VectorStore.create({
 
 // 3. Insert raw text strings.
 // The browser automatically chunks the text according to the strategy defined
-// above, generates embeddings, and indexes them under the hood.
+// above, generates embeddings using the corresponding task type (e.g., Retrieval (Document)),
+// and indexes them under the hood.
 const insertResult = await vectorStore.insert(
 [
   {
@@ -151,6 +153,7 @@ console.log(insertResult);
 */
 
 // 4. Perform a semantic search using text.
+// The query string is automatically embedded using the corresponding query task type (e.g., Retrieval (Query)).
 const searchResults = await vectorStore.findNearest("fox, the animal", {
   maxNumResults: 1,
   scoreThreshold: 0.5
@@ -185,7 +188,8 @@ console.log(availableStores);
 /*
 [
   {
-    id: "my-app-notes"
+    id: "my-app-notes",
+    taskType: "retrieval",
     createdAt: 1718293849392,
     lastModified: 1718293999123,
     itemCount: 42,
@@ -215,6 +219,7 @@ console.log(vectorStore.metadata);
 /*
 {
   id: "my-app-notes",
+  taskType: "retrieval",
   createdAt: 1718293849392,
   lastModified: 1718293999123,
   itemCount: 42,
@@ -318,6 +323,13 @@ score, the application can instantly flag the comment with a client-side warning
 before it is ever submitted to the server.
 
 ## Detailed Design Discussion
+
+### Task Type
+
+The `taskType` option allows developers to specify the intended use case for the vector store, such as `retrieval` or `question_answering`. By defining a task type during creation:
+- **Validation**: The API validates whether the requested task type is supported by the underlying embedding model, failing early if it is not.
+- **Automatic Contextual Embedding**: The vector store automatically applies the appropriate contextual embedding based on the operation. For example, when using `taskType: "retrieval"`, the API automatically applies the "Retrieval (Document)" task type when embedding text during `insert()`, and applies the "Retrieval (Query)" task type when embedding the query string during `findNearest()`.
+- **Store-Level Configuration**: The `taskType` is intentionally defined once during vector store creation rather than as an option in `findNearest()`. If developers were allowed to pass a different task type during a search, the query embedding would be mathematically incompatible with the stored document embeddings. To perform an accurate similarity search, the API would be forced to completely re-embed the entire vector store on the fly, which is computationally prohibitive.
 
 ### Chunking Strategy
 
